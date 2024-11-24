@@ -1,0 +1,8 @@
+Idempotent data
+Relying on the latest partition of a not properly modeled scd table Slowly changing dimension data exception should be backfilling old data.
+types of scd's
+type 0 does not change arent actaully scd (birthdays)
+type 1 you only care about the latest value  NEVER USE THIS TYPE BECAUSE IT MAKES YOUR PIPELINES NOT IDEMPOTENT ANYMORE 
+type 2 you care about what the value was from start date to end date 
+current values usually have either an endate that is null far into the future like 9999-12-31 hard to use since there is more than 1 row per dimension, you need to be careful about filtering on time only type of scd that is idempotent
+type 3 you only care about the original and current benefits you only have 1 row per dimension drawbacks you lose history in between original and current partially idempotent

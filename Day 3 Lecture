@@ -1,0 +1,40 @@
+Graph data modeling
+no schema but its edge and properties, more verticy based data model.
+additive vs non additive dimensions
+power of enums
+when should you use flexible data types
+graph data modeling
+map is only flexible struct is not array is kinda flexible but it has to be specific type
+map string string is agnostic and can be powerful.
+what makes dimensions additive
+additive means you dont double count for example age is additive 'the population is equal to 20 year olds + 30 year olds...'
+applications interface is not additive 'the number of active users != # of civic drivers + # of corolla drivers + accord drivers'
+if i drive subaru and chevy then i would be counted twice.\
+essential nature of additivity
+a dimension is additive over a specific window of time. iif the grain of data over that window can only ever be one value at a time
+how does additivity help?
+you dont need to use count(distinct) on pre aggregated dimensions
+a ratio metric is also non additive. can a user be two of them at the same time in a given day. if they can they are not additive.
+usually is a users tool like android vs iphone or cars
+when should you use enums?
+enums are great for low to medium cardinality
+country is a great example of where enums start to struggle.
+is it less than 50 then enum is a good idea.
+why should you use enums built in data quality, static fields, documentation.
+enumerations make amazing subpartitions because you have an exhaustive list, they chunk up big data problem into manageable pieces
+the little book of pipelines
+how do you model data from disparate sources into a shared schema
+flexible schema! leverage a lot of map data types.
+overlaps with graph database.
+vertex type is an enumerated list of types.
+flexible schema benefits you dont ahve to run alter table commands, you can manage a lot more columns,
+your schemas dont have a ton of 'NULL' Columns, 'other_properties' column is pretty awesome for rarely used but needed columns
+drawbacks compression is usually worse (especisially if you use json), readability, queryability
+how is graph data modleing different
+graph modeling is relationship focused, not entity focused
+because of this, you can do very poor job at modeling the entities.
+usually the model looks like, identifier: string, type:string, properties:map<string,string>
+the relationships are modeled a bit more in depth
+subject_identifier:string, subject_type:vertex_string, object_identifier:string, object_type:vertex_type, edge_type:edge_type,
+properites:map<string,string>
+

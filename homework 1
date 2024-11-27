@@ -1,0 +1,147 @@
+create type films as (
+	film text,
+	votes integer,
+	rating real,
+	filmid text)
+
+create type quality_class as 
+	enum('star','good','average','bad');
+
+create table actors(
+	actor_name text,
+	actorid text,
+	year text,
+	films films[],
+	quality_class quality_class,
+	years_since_last_film integer,
+	current_year integer,
+	is_active boolean,
+	primary key (actorid, current_year));
+
+
+insert into actors
+	with last_year as (
+	select * from actors
+	where current_year = 1969),
+	current_year as (
+	select actor,
+	actorid,
+	year,
+	CASE 
+	WHEN year IS NULL THEN array[]::films[]
+    ELSE ARRAY_AGG(ROW(
+    film, votes, rating, filmid)::films)
+    end as films,
+    case when 
+	AVG(rating)	> 8 then 'star'
+	when 
+	AVG(rating) > 7 
+	and AVG(rating) <= 8 then 'good'
+	when 
+	AVG(rating) > 6
+	and AVG(rating) <= 7 then 'average'
+	when 
+	AVG(rating) > 6
+	and AVG(rating) <= 7 then 'bad'
+	else NULL
+		end::quality_class
+		as quality_class
+	from actor_films ps where year = 1970
+	group by actor,
+	actorid,
+	year
+	)
+	
+select 
+	coalesce(t.actor,
+	y.actor_name) as actor,
+	coalesce(t.actorid,
+	y.actorid) as actorid,
+	coalesce(t.year,
+	y.current_year) as current_year,
+	case
+		when y.films is null
+	then t.films
+		when t.films is not null 
+		then y.films
+		else y.films
+	end as films,
+	coalesce(t.quality_class,
+	y.quality_class) as quality_class,
+	case when t.year is not null then 0
+	else coalesce(y.years_since_last_film,0)+1
+	end as years_since_last_film,
+	coalesce(t.year,
+	y.current_year + 1) as current_year,
+	case when t.actorid is not null then 
+	true 
+	else false 
+	end as is_active
+from
+	current_year t
+full outer join last_year y
+	on
+	t.actorid = y.actorid;
+
+select * from Actors
+
+
+
+
+/*	
+insert into actors
+	with years as (
+	select *
+	 from generate_series(1970,2021) as year
+	),
+		p as (
+			select actor as actor_name,MIN(year) as first_year
+			from actor_films 
+			group by actor
+		),
+		actors_and_years as (
+			select *
+			from p
+				join years y on p.first_year <= y.year
+		),
+		windowed as (
+			select ps.actor as actor_name,
+				   ps.year,
+				   array_remove(
+				   array_agg(case 
+				   when ps.year is not null then
+				   row(ps.year,
+				   ps.film,
+				   ps.votes,
+				   ps.rating,
+				   ps.filmid
+				   )::films 
+				   end)
+				   over (partition by pas.actor_name 
+				   order by coalesce(pas.year,ps.year)),
+				   null)
+				   as film_year
+				   from actors_and_years pas
+				   left join actor_films ps
+				   on pas.actor_name = ps.actor
+				   and pas.year = ps.year
+				  order by pas.actor_name, pas.year
+				  )
+				  
+				  select 
+				  	w.actor_name,
+				  	case 
+when (film_year[cardinality(year)]::films).rating > 8 then 'star'
+when (film_year[cardinality(year)]::films).rating > 7 then 'good'
+when (film_year[cardinality(year)]::films).rating > 6 then 'average'
+else 'bad'
+					end::quality_class as quality_class,
+w.year - (film_year[cardinality(year)]::films).year as years_since_last_active,
+				  	w.year,
+(film_year[cardinality(year)]::rating).year = year as is_active
+				  	from windowed w;
+*/		
+	
+	
+	
+select * from actors

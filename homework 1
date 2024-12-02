@@ -86,62 +86,168 @@ full outer join last_year y
 select * from Actors
 
 
+create table actor_history_scd(
+	actor_name text,
+	quality_class quality_class,
+	is_active BOOLEAN,
+	current_year integer,
+	start_date integer,
+	end_date integer,
+	primary key (actor_name, start_date)
+);
 
+WITH actors_with_changes AS (
+    SELECT 
+        actor_name,
+        current_year,
+        quality_class,
+        is_active,
+        LAG(quality_class) OVER 
+        (PARTITION BY actorid 
+        ORDER BY current_year) AS prev_quality_class,
+        LAG(is_active) OVER 
+        (PARTITION BY actorid 
+        ORDER BY current_year) AS prev_is_active
+    FROM actors
+),
+change_indicators AS (
+    SELECT 
+        actor_name,
+        current_year,
+        quality_class,
+        is_active,
+        CASE 
+            WHEN quality_class 
+            <> prev_quality_class 
+            OR is_active <> prev_is_active 
+            THEN 1 
+            ELSE 0 
+        END AS change_indicator
+    FROM actors_with_changes
+),
+streak_groups AS (
+    SELECT 
+        actor_name,
+        current_year,
+        quality_class,
+        is_active,
+        SUM(change_indicator) OVER 
+        (PARTITION BY actor_name 
+        ORDER BY current_year) AS change_group
+    FROM change_indicators
+),
+grouped_history AS (
+    SELECT 
+        actor_name,
+        quality_class,
+        is_active,
+        MIN(current_year) AS start_date,
+        MAX(current_year) AS end_date
+    FROM streak_groups
+    GROUP BY actor_name, quality_class, is_active, change_group
+)
+INSERT INTO actor_history_scd 
+(actor_name, 
+quality_class, 
+is_active, 
+start_date, 
+end_date)
+SELECT 
+    actor_name,
+    quality_class,
+    is_active,
+    start_date,
+    end_date
+FROM grouped_history;
 
-/*	
-insert into actors
-	with years as (
-	select *
-	 from generate_series(1970,2021) as year
-	),
-		p as (
-			select actor as actor_name,MIN(year) as first_year
-			from actor_films 
-			group by actor
-		),
-		actors_and_years as (
-			select *
-			from p
-				join years y on p.first_year <= y.year
-		),
-		windowed as (
-			select ps.actor as actor_name,
-				   ps.year,
-				   array_remove(
-				   array_agg(case 
-				   when ps.year is not null then
-				   row(ps.year,
-				   ps.film,
-				   ps.votes,
-				   ps.rating,
-				   ps.filmid
-				   )::films 
-				   end)
-				   over (partition by pas.actor_name 
-				   order by coalesce(pas.year,ps.year)),
-				   null)
-				   as film_year
-				   from actors_and_years pas
-				   left join actor_films ps
-				   on pas.actor_name = ps.actor
-				   and pas.year = ps.year
-				  order by pas.actor_name, pas.year
-				  )
-				  
-				  select 
-				  	w.actor_name,
-				  	case 
-when (film_year[cardinality(year)]::films).rating > 8 then 'star'
-when (film_year[cardinality(year)]::films).rating > 7 then 'good'
-when (film_year[cardinality(year)]::films).rating > 6 then 'average'
-else 'bad'
-					end::quality_class as quality_class,
-w.year - (film_year[cardinality(year)]::films).year as years_since_last_active,
-				  	w.year,
-(film_year[cardinality(year)]::rating).year = year as is_active
-				  	from windowed w;
-*/		
-	
-	
-	
-select * from actors
+WITH last_scd_records AS (
+    SELECT 
+        actor_name,
+        quality_class,
+        is_active,
+        start_date,
+        end_date
+    FROM actor_history_scd
+    WHERE end_date = (SELECT MAX(end_date) 
+    FROM actor_history_scd)
+),
+current_year_data AS (
+    SELECT 
+        actor_name,
+        current_year AS year,
+        quality_class,
+        is_active
+    FROM actors
+    WHERE current_year = (SELECT MAX(current_year) FROM actors)
+),
+unchanged_records AS (
+    SELECT 
+        l.actor_name,
+        l.quality_class,
+        l.is_active,
+        l.start_date,
+        c.year AS end_year
+    FROM last_scd_records l
+    JOIN current_year_data c
+        ON l.actor_name = c.actor_name
+       AND l.quality_class = c.quality_class
+       AND l.is_active = c.is_active
+),
+changed_records AS (
+    SELECT 
+        l.actor_name,
+        l.quality_class,
+        l.is_active,
+        l.start_date,
+        l.end_date -- Old record, closed.
+    FROM last_scd_records l
+    JOIN current_year_data c
+        ON l.actor_name = c.actor_name
+       AND (l.quality_class <> c.quality_class 
+       OR l.is_active <> c.is_active)
+    UNION ALL
+    SELECT 
+        c.actor_name,
+        c.quality_class,
+        c.is_active,
+        c.year AS start_date,
+        c.year AS end_date 
+    FROM last_scd_records l
+    JOIN current_year_data c
+        ON l.actor_name = c.actor_name
+       AND (l.quality_class <> c.quality_class 
+       OR l.is_active <> c.is_active)
+),
+new_records AS (
+    SELECT 
+        c.actor_name,
+        c.quality_class,
+        c.is_active,
+        c.year AS start_date,
+        c.year AS end_date
+    FROM current_year_data c
+    LEFT JOIN last_scd_records l
+        ON c.actor_name = l.actor_name
+    WHERE l.actor_name IS NULL
+),
+deduplicated_inserts AS (
+    SELECT DISTINCT * FROM unchanged_records
+    UNION ALL
+    SELECT DISTINCT * FROM changed_records
+    UNION ALL
+    SELECT DISTINCT * FROM new_records
+)
+    
+INSERT INTO actor_history_scd (
+actor_name, 
+quality_class, 
+is_active, 
+start_date,
+end_date)
+SELECT *
+FROM deduplicated_inserts
+ON CONFLICT (actor_name, start_date) DO UPDATE
+SET 
+    quality_class = EXCLUDED.quality_class,
+    is_active = EXCLUDED.is_active,
+    end_date = EXCLUDED.end_date;

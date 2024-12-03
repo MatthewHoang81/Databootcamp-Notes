@@ -1,0 +1,31 @@
+Did a user log in today?
+  the log event would be a fact that informs the "dim_is_active" dimension
+  VS the state "dim_is_activated" which is something that is state-driven, not activity driven
+You can aggregate facts and turn them into dimensions
+  is this person a "high engager"? a "low engager"?
+    CASE WHEN to bucketize aggregated facts can be very useful to reduce cardinality
+Why should shuffle be minimized?
+big data leverages parallelism as much as it can
+some steps are inherently less "parallelizable" than others
+What types of queries are highly parallelizable
+Extremely parallel
+  SELECT,FROM,WHERE
+kinda parallel
+  GROUP BY, JOIN, HAVING
+Painfully not parallel
+  ORDER BY
+Shuffle is all the data on a specific key needs to be on a specific machine
+order by at the end of a query, 1 row of data on a billion machines, The only way to ensure the data is ordered is to put it on one machine and order it.
+you can use order by in window functions only if you have partion by as well.
+How the data is structured depends on what key words you need to use.
+How do you make group by more efficient
+Give group by some buckets and gaurantees
+REDUCE THE DATA VOLUME AS MUCH AS YOU CAN
+How to reduce fact data modeling gives you superpowers
+Impact of analysis
+  Multi year analyses took hours instead of weeks
+  unlocked "decades long slow burn" analyses at Facebook
+Allowed for fast correlation analysis between user level metrics and dimensions
+The final stras for why zach quit working at Facebook
+I built this framework for 50 core metrics and 15 core dimensions that enabled 10+ year analyses to happen in hours instead of weeks
+They told me this wasnt senior engineer caliber

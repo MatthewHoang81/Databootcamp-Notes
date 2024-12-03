@@ -1,0 +1,100 @@
+/*
+insert into users_cumulated
+with yesterday as (
+	select 
+	*
+	from users_cumulated
+	where date = DATE('2023-01-30')
+),
+	today as (
+	select 
+	cast(user_id as text) as user_id,
+	DATE(cast(event_time as TIMESTAMP)) as date_active
+	from events
+	where DATE(cast(event_time as TIMESTAMP))
+	= DATE('2023-01-31')
+	and user_id is not null
+	group by user_id,
+	DATE(cast(event_time as TIMESTAMP))
+)
+
+select 
+	COALESCE(t.user_id, y.user_id) as user_id,
+	case when y.dates_active is null
+		then array[t.date_active]
+		when t.date_active is null then y.dates_active
+		else ARRAY[t.date_active] || y.dates_active
+		END
+		as dates_active,
+	COALESCE(t.date_active,
+	y.date + Interval '1 day') as date
+ from today t
+	full outer join yesterday y 
+	on t.user_id = y.user_id
+	*/
+	
+	
+with users as (
+select * from users_cumulated
+where DATE = date('2023-01-31')
+),
+	series as (
+select *
+from generate_series(DATE('2023-01-01'),
+DATE('2023-01-31'), interval '1 day')
+as series_date
+),
+	place_holder_ints as(
+
+select 
+case WHEN
+dates_active @> array[DATE(series_date)]
+then cast(POW(2,32- (date - date(series_date))) as BIGINT)
+else 0
+end as placeholder_int_value
+,*
+from users 
+cross join series
+)
+
+select 
+	user_id,
+	cast(cast(SUM(placeholder_int_value) 
+	as BIGINT) as BIT(32)),
+	BIT_COUNT(cast(cast(SUM(placeholder_int_value) 
+	as BIGINT) as BIT(32)))
+	as dim_is_monthly_active,
+	BIT_COUNT(CAST('111111100000000000000000' as BIT(32)) &
+	--& is called a bitwise and gate
+	cast(cast(SUM(placeholder_int_value) 
+	as BIGINT) as BIT(32))) > 0
+	as weekly_active,
+	BIT_COUNT(CAST('100000000000000000000000' as BIT(32)) &
+	--& is called a bitwise and gate
+	cast(cast(SUM(placeholder_int_value) 
+	as BIGINT) as BIT(32))) > 0
+	as daily_active
+from place_holder_ints
+group by user_id
+
+/*
+
+	
+	
+	
+select 
+MAX(event_time),
+MIN(event_time)
+from EVENTS
+
+
+
+
+create table users_cumulated(
+	user_id TEXT,
+-- the list of dates in the past where the user was active
+	dates_active DATE[],
+-- current date for the user
+	date DATE,
+	primary key (user_id, date)
+)*/
